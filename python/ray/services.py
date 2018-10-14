@@ -987,7 +987,9 @@ def start_raylet(redis_address,
                  stdout_file=None,
                  stderr_file=None,
                  cleanup=True,
-                 redis_password=None):
+                 redis_password=None,
+                 include_java=False,
+                 java_classpath=None):
     """Start a raylet, which is a combined local scheduler and object manager.
 
     Args:
@@ -1011,6 +1013,8 @@ def start_raylet(redis_address,
             then this process will be killed by serices.cleanup() when the
             Python process that imported services exits.
         redis_password (str): The password of the redis server.
+        include_java (bool): Support Java worker or not.
+        java_classpath (str): Specify Java classpath if Java worker is enabled.
 
     Returns:
         The raylet socket name.
@@ -1046,6 +1050,9 @@ def start_raylet(redis_address,
                                 get_temp_root()))
     if redis_password:
         start_worker_command += " --redis-password {}".format(redis_password)
+    start_java_worker_command = build_java_worker_command(
+        include_java, java_classpath, redis_address,
+        plasma_store_name, raylet_name)
 
     command = [
         RAYLET_EXECUTABLE,
@@ -1058,7 +1065,7 @@ def start_raylet(redis_address,
         str(maximum_startup_concurrency),
         resource_argument,
         start_worker_command,
-        "",  # Worker command for Java, not needed for Python.
+        start_java_worker_command,
         redis_password or "",
     ]
 
@@ -1088,6 +1095,23 @@ def start_raylet(redis_address,
 
     return raylet_name
 
+def build_java_worker_command(include_java, java_classpath,
+                              redis_address, plasma_store_name, raylet_name):
+    """This method assembles java worker arguments
+    """
+    if not include_java:
+        return ""
+    command = "java "
+    if java_classpath is not None:
+        command += ('-classpath %s ' % java_classpath)
+    if redis_address is not None:
+        command += ('-Dray.redis.address=%s ' % redis_address)
+    if plasma_store_name is not None:
+        command += ('-Dray.object-store.socket-name=%s ' % plasma_store_name)
+    if raylet_name is not None:
+        command += ('-Dray.raylet.socket-name=%s ' % raylet_name)
+    command += "org.ray.runtime.runner.worker.DefaultWorker"
+    return command
 
 def start_plasma_store(node_ip_address,
                        redis_address,
@@ -1362,7 +1386,9 @@ def start_ray_processes(address_info=None,
                         use_raylet=False,
                         plasma_store_socket_name=None,
                         raylet_socket_name=None,
-                        temp_dir=None):
+                        temp_dir=None,
+                        include_java=False,
+                        java_classpath=None):
     """Helper method to start Ray processes.
 
     Args:
@@ -1425,6 +1451,8 @@ def start_ray_processes(address_info=None,
             used by the raylet process.
         temp_dir (str): If provided, it will specify the root temporary
             directory for the Ray process.
+        include_java: Support Java worker or not.
+        java_classpath: Specify Java classpath if Java worker is enabled.
 
     Returns:
         A dictionary of the address information for the processes that were
@@ -1638,7 +1666,9 @@ def start_ray_processes(address_info=None,
                     stdout_file=raylet_stdout_file,
                     stderr_file=raylet_stderr_file,
                     cleanup=cleanup,
-                    redis_password=redis_password))
+                    redis_password=redis_password,
+                    include_java=include_java,
+                    java_classpath=java_classpath))
 
     if not use_raylet:
         # Start any workers that the local scheduler has not already started.
@@ -1695,7 +1725,9 @@ def start_ray_node(node_ip_address,
                    use_raylet=False,
                    plasma_store_socket_name=None,
                    raylet_socket_name=None,
-                   temp_dir=None):
+                   temp_dir=None,
+                   include_java=False,
+                   java_classpath=None):
     """Start the Ray processes for a single node.
 
     This assumes that the Ray processes on some master node have already been
@@ -1738,6 +1770,8 @@ def start_ray_node(node_ip_address,
             used by the raylet process.
         temp_dir (str): If provided, it will specify the root temporary
             directory for the Ray process.
+        include_java: Support Java worker or not.
+        java_classpath: Specify Java classpath if Java worker is enabled.
 
     Returns:
         A dictionary of the address information for the processes that were
@@ -1765,7 +1799,9 @@ def start_ray_node(node_ip_address,
         use_raylet=use_raylet,
         plasma_store_socket_name=plasma_store_socket_name,
         raylet_socket_name=raylet_socket_name,
-        temp_dir=temp_dir)
+        temp_dir=temp_dir,
+        include_java=include_java,
+        java_classpath=java_classpath)
 
 
 def start_ray_head(address_info=None,
@@ -1791,7 +1827,9 @@ def start_ray_head(address_info=None,
                    use_raylet=False,
                    plasma_store_socket_name=None,
                    raylet_socket_name=None,
-                   temp_dir=None):
+                   temp_dir=None,
+                   include_java=False,
+                   java_classpath=None):
     """Start Ray in local mode.
 
     Args:
@@ -1848,6 +1886,8 @@ def start_ray_head(address_info=None,
             used by the raylet process.
         temp_dir (str): If provided, it will specify the root temporary
             directory for the Ray process.
+        include_java: Support Java worker or not.
+        java_classpath: Specify Java classpath if Java worker is enabled.
 
     Returns:
         A dictionary of the address information for the processes that were
@@ -1880,4 +1920,6 @@ def start_ray_head(address_info=None,
         use_raylet=use_raylet,
         plasma_store_socket_name=plasma_store_socket_name,
         raylet_socket_name=raylet_socket_name,
-        temp_dir=temp_dir)
+        temp_dir=temp_dir,
+        include_java=include_java,
+        java_classpath=java_classpath)
